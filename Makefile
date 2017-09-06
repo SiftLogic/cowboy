@@ -1,88 +1,52 @@
 # See LICENSE for licensing information.
 
 PROJECT = cowboy
-RANCH_VSN = 0.6.0
-ERLC_OPTS = -Werror +debug_info +warn_export_all # +bin_opt_info +warn_missing_spec
+PROJECT_DESCRIPTION = Small, fast, modern HTTP server.
+PROJECT_VERSION = 2.0.0-rc.2
+PROJECT_REGISTERED = cowboy_clock
 
-DEPS_DIR ?= $(CURDIR)/deps
-export DEPS_DIR
+# Options.
 
-# Makefile tweaks.
+COMPILE_FIRST = cowboy_middleware cowboy_stream cowboy_sub_protocol
+PLT_APPS = public_key ssl
+CT_OPTS += -ct_hooks cowboy_ct_hook [] # -boot start_sasl
 
-V ?= 0
+CI_OTP ?= OTP-19.0.7 OTP-19.1.6 OTP-19.2.3 OTP-19.3.6.2 OTP-20.0.4
+CI_HIPE ?= $(lastword $(CI_OTP))
+# CI_ERLLVM ?= $(CI_HIPE)
 
-appsrc_verbose_0 = @echo " APP   " $(PROJECT).app.src;
-appsrc_verbose = $(appsrc_verbose_$(V))
+# Dependencies.
 
-erlc_verbose_0 = @echo " ERLC  " $(?F);
-erlc_verbose = $(erlc_verbose_$(V))
+LOCAL_DEPS = crypto
 
-gen_verbose_0 = @echo " GEN   " $@;
-gen_verbose = $(gen_verbose_$(V))
+DEPS = cowlib ranch
+dep_cowlib = git https://github.com/ninenines/cowlib 2.0.0-rc.1
+dep_ranch = git https://github.com/ninenines/ranch 1.4.0
 
-.PHONY: all clean-all app clean docs clean-docs tests autobahn build-plt dialyze
+DOC_DEPS = asciideck
 
-# Application.
+TEST_DEPS = ct_helper gun
+dep_ct_helper = git https://github.com/extend/ct_helper master
+dep_gun = git https://github.com/ninenines/gun master
 
-all: app
+# Standard targets.
 
-clean-all: clean clean-docs
-	$(gen_verbose) rm -rf .$(PROJECT).plt $(DEPS_DIR) logs
+include erlang.mk
 
-deps/ranch:
-	@mkdir -p $(DEPS_DIR)
-	git clone -n -- https://github.com/extend/ranch.git $(DEPS_DIR)/ranch
-	cd $(DEPS_DIR)/ranch ; git checkout -q $(RANCH_VSN)
+# Compile options.
 
-MODULES = $(shell ls src/*.erl | sed 's/src\///;s/\.erl/,/' | sed '$$s/.$$//')
+ERLC_OPTS += +warn_export_all +warn_missing_spec +warn_untyped_record
+TEST_ERLC_OPTS += +'{parse_transform, eunit_autoexport}'
 
-app: deps/ranch ebin/$(PROJECT).app
-	$(appsrc_verbose) cat src/$(PROJECT).app.src \
-		| sed 's/{modules, \[\]}/{modules, \[$(MODULES)\]}/' \
-		> ebin/$(PROJECT).app
-	@$(MAKE) -C $(DEPS_DIR)/ranch
+# Generate rebar.config on build.
 
-ebin/$(PROJECT).app: src/*.erl
-	@mkdir -p ebin/
-	$(erlc_verbose) erlc -v $(ERLC_OPTS) -o ebin/ -pa ebin/ \
-		src/$(PROJECT)_middleware.erl $?
+app:: rebar.config
 
-clean:
-	-@$(MAKE) -C $(DEPS_DIR)/ranch clean
-	$(gen_verbose) rm -rf ebin/ test/*.beam erl_crash.dump
+# Also dialyze the tests.
 
-# Documentation.
+# DIALYZER_OPTS += --src -r test
 
-docs: clean-docs
-	$(gen_verbose) erl -noshell \
-		-eval 'edoc:application($(PROJECT), ".", []), init:stop().'
+# Use erl_make_certs from the tested release.
 
-clean-docs:
-	$(gen_verbose) rm -f doc/*.css doc/*.html doc/*.png doc/edoc-info
-
-# Tests.
-
-CT_RUN = ct_run \
-	-pa ebin $(DEPS_DIR)/*/ebin \
-	-dir test \
-	-logdir logs \
-	-cover test/cover.spec
-
-tests: ERLC_OPTS += -DTEST=1
-tests: clean app
-	@mkdir -p logs/
-	@$(CT_RUN) -suite eunit_SUITE http_SUITE ws_SUITE
-
-autobahn: clean app
-	@mkdir -p logs/
-	@$(CT_RUN) -suite autobahn_SUITE
-
-# Dialyzer.
-
-build-plt: app
-	@dialyzer --build_plt --output_plt .$(PROJECT).plt \
-		--apps erts kernel stdlib crypto public_key ssl $(DEPS_DIR)/ranch
-
-dialyze:
-	@dialyzer --src src --plt .$(PROJECT).plt --no_native \
-		-Werror_handling -Wrace_conditions -Wunmatched_returns # -Wunderspecs
+ci-setup:: clean deps test-deps
+	$(gen_verbose) cp ~/.kerl/builds/$(CI_OTP_RELEASE)/otp_src_git/lib/ssl/test/erl_make_certs.erl deps/ct_helper/src/

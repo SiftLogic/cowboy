@@ -12,12 +12,14 @@
 start(_Type, _Args) ->
 	Dispatch = cowboy_router:compile([
 		{'_', [
-			{"/", toppage_handler, []},
-			{"/websocket", ws_handler, []}
+			{"/", cowboy_static, {priv_file, websocket, "index.html"}},
+			{"/websocket", ws_handler, []},
+			{"/static/[...]", cowboy_static, {priv_dir, websocket, "static"}}
 		]}
 	]),
-	{ok, _} = cowboy:start_http(http, 100, [{port, 8080}],
-		[{env, [{dispatch, Dispatch}]}]),
+	{ok, _} = cowboy:start_clear(http, [{port, 8080}], #{
+		env => #{dispatch => Dispatch}
+	}),
 	websocket_sup:start_link().
 
 stop(_State) ->
