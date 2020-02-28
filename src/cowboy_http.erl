@@ -939,7 +939,7 @@ commands(State=#state{out_streamid=Current, streams=Streams0}, StreamID, Command
 		Stream#stream{queue=Queue ++ Commands}),
 	State#state{streams=Streams};
 %% When we have finished reading the request body, do nothing.
-￼commands(State=#state{flow=infinity}, StreamID, [{flow, _}|Tail]) ->
+commands(State=#state{flow=infinity}, StreamID, [{flow, _}|Tail]) ->
 	commands(State, StreamID, Tail);
 %% Read the request body.
 commands(State=#state{socket=Socket, transport=Transport, flow=Flow0}, StreamID,
