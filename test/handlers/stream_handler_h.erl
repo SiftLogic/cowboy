@@ -35,7 +35,7 @@ init_commands(_, _, #state{test=crash_in_terminate}) ->
 init_commands(_, _, #state{test=crash_in_early_error}) ->
 	error(crash);
 init_commands(_, _, #state{test=flow_after_body_fully_read}) ->
-￼	[];
+	[];
 init_commands(_, _, #state{test=set_options_ignore_unknown}) ->
 	[
 		{set_options, #{unknown_options => true}},
